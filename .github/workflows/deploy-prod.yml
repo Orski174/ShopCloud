@@ -1,0 +1,3 @@
+# TODO: Implement production deployment pipeline
+# Trigger: on push to 'main' branch (with manual approval gate)
+# Steps: build images, push to ECR, rolling update ECS services in prod account
