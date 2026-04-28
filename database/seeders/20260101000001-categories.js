@@ -2,6 +2,11 @@
 
 module.exports = {
   async up(queryInterface) {
+    const [[{ count }]] = await queryInterface.sequelize.query(
+      "SELECT COUNT(*) as count FROM categories"
+    );
+    if (parseInt(count) > 0) return;
+
     await queryInterface.bulkInsert('categories', [
       {
         id: 'a1b2c3d4-0001-0001-0001-000000000001',
