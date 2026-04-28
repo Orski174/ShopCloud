@@ -131,4 +131,27 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// PATCH /products/:id/stock  — internal endpoint for checkout service to decrement stock
+router.patch('/:id/stock', async (req, res) => {
+  const internalHeader = req.headers['x-internal-service'];
+  if (internalHeader !== 'checkout') {
+    return res.status(403).json({ error: 'Internal endpoint only' });
+  }
+  const { decrement } = req.body;
+  if (!Number.isInteger(decrement) || decrement < 1) {
+    return res.status(400).json({ error: 'Invalid decrement value' });
+  }
+  try {
+    const product = await Product.findByPk(req.params.id);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    if (product.stock_quantity < decrement) {
+      return res.status(409).json({ error: 'Insufficient stock' });
+    }
+    await product.update({ stock_quantity: product.stock_quantity - decrement });
+    res.json({ id: product.id, stock_quantity: product.stock_quantity });
+  } catch (err) {
+    res.status(500).json({ error: 'Stock update failed', message: err.message });
+  }
+});
+
 module.exports = router;
