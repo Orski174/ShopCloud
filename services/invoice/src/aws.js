@@ -39,17 +39,17 @@ async function sendInvoiceEmail(toEmail, orderId, pdfBuffer) {
         Source: fromEmail,
         Destination: { ToAddresses: [toEmail] },
         Message: {
-          Subject: { Data: `ShopCloud — Invoice for Order #${orderId}` },
+          Subject: { Data: `ShopCloud - Invoice for Order #${orderId}` },
           Body: {
             Text: {
-              Data: `Thank you for your order!\n\nYour invoice for order #${orderId} is attached.\n\nShopCloud Team`,
+              Data: `Thank you for your order!\n\nYour invoice for order #${orderId} has been generated and stored successfully.\n\nShopCloud Team`,
             },
           },
         },
       })
     );
   } catch (err) {
-    // SES sandbox may reject in dev — log and continue
+    // SES sandbox may reject in dev; log and continue.
     console.warn(`SES send failed for ${toEmail}:`, err.message);
   }
 }
