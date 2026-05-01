@@ -1,3 +1,67 @@
-# TODO: Implement CI pipeline
-# Trigger: on push/PR to any branch
-# Steps: lint, test all services, build Docker images
+name: ShopCloud CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - dev
+  pull_request:
+    branches:
+      - master
+      - main
+      - dev
+
+jobs:
+  build-and-test:
+    name: Build and Test Services
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: project
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show project structure
+        run: ls -la
+
+      - name: Build Docker Compose stack
+        run: docker compose build
+
+      - name: Start Docker Compose stack
+        run: docker compose up -d
+
+      - name: Wait for services to start
+        run: sleep 60
+
+      - name: Show running containers
+        run: docker compose ps
+
+      - name: Check auth health
+        run: curl --fail http://localhost:3001/health
+
+      - name: Check catalog health
+        run: curl --fail http://localhost:3002/health
+
+      - name: Check cart health
+        run: curl --fail http://localhost:3003/health
+
+      - name: Check checkout health
+        run: curl --fail http://localhost:3004/health
+
+      - name: Check admin health
+        run: curl --fail http://localhost:3005/health
+
+      - name: Check invoice health
+        run: curl --fail http://localhost:3006/health
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down

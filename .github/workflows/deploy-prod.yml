@@ -1,3 +1,154 @@
-# TODO: Implement production deployment pipeline
-# Trigger: on push to 'main' branch (with manual approval gate)
-# Steps: build images, push to ECR, rolling update ECS services in prod account
+name: Deploy to Prod
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tags: ${{ steps.image-tags.outputs.tags }}
+    strategy:
+      matrix:
+        service: [auth, catalog, cart, checkout, admin, invoice]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.PROD_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: shopcloud/${{ matrix.service }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./project/services/${{ matrix.service }}
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:prod
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:prod
+
+      - name: Output image tags
+        id: image-tags
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: echo "tags=$ECR_REGISTRY/shopcloud/${{ matrix.service }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    strategy:
+      matrix:
+        service: [auth, catalog, cart, checkout, admin, invoice]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.PROD_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster shopcloud-prod \
+            --service shopcloud-${{ matrix.service }}-prod \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for service to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster shopcloud-prod \
+            --services shopcloud-${{ matrix.service }}-prod \
+            --region ${{ env.AWS_REGION }}
+        timeout-minutes: 10
+
+      - name: Verify service health
+        run: |
+          SERVICE_ENDPOINT=$(aws elbv2 describe-load-balancers \
+            --names shopcloud-public-prod \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          
+          # Service URL depends on service name
+          case "${{ matrix.service }}" in
+            auth)
+              SERVICE_PATH="/auth/health"
+              ;;
+            catalog)
+              SERVICE_PATH="/catalog/health"
+              ;;
+            cart)
+              SERVICE_PATH="/cart/health"
+              ;;
+            checkout)
+              SERVICE_PATH="/checkout/health"
+              ;;
+            invoice)
+              SERVICE_PATH="/invoice/health"
+              ;;
+            admin)
+              echo "Admin service accessed via internal ALB"
+              exit 0
+              ;;
+          esac
+          
+          # Try multiple times to check the endpoint
+          for i in {1..10}; do
+            if curl -s "http://$SERVICE_ENDPOINT$SERVICE_PATH" | grep -q "ok\|running"; then
+              echo "Service ${{ matrix.service }} is healthy"
+              exit 0
+            fi
+            echo "Attempt $i: Service not ready, waiting..."
+            sleep 15
+          done
+          
+          echo "Error: Service ${{ matrix.service }} failed health check after deployment"
+          exit 1
+
+      - name: Check 5xx error rate
+        run: |
+          # Get ALB metrics for the last 5 minutes
+          END_TIME=$(date -u +%Y-%m-%dT%H:%M:%S)
+          START_TIME=$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%S)
+          
+          ERRORS=$(aws cloudwatch get-metric-statistics \
+            --namespace AWS/ApplicationELB \
+            --metric-name HTTPCode_Target_5XX_Count \
+            --dimensions Name=LoadBalancer,Value=app/shopcloud-public-prod/* \
+            --start-time $START_TIME \
+            --end-time $END_TIME \
+            --period 300 \
+            --statistics Sum \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Datapoints[0].Sum' \
+            --output text)
+          
+          if [ "$ERRORS" != "None" ] && [ $(echo "$ERRORS > 50" | bc) -eq 1 ]; then
+            echo "Error: High 5xx error rate detected ($ERRORS)"
+            exit 1
+          fi
+          
+          echo "5xx error rate acceptable"

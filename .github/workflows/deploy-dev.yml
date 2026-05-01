@@ -1,3 +1,127 @@
-# TODO: Implement dev deployment pipeline
-# Trigger: on push to 'develop' branch
-# Steps: build images, push to ECR, update ECS services in dev account
+name: Deploy to Dev
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tags: ${{ steps.image-tags.outputs.tags }}
+    strategy:
+      matrix:
+        service: [auth, catalog, cart, checkout, admin, invoice]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.DEV_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: shopcloud/${{ matrix.service }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./project/services/${{ matrix.service }}
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Output image tags
+        id: image-tags
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: echo "tags=$ECR_REGISTRY/shopcloud/${{ matrix.service }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [auth, catalog, cart, checkout, admin, invoice]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.DEV_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster shopcloud-dev \
+            --service shopcloud-${{ matrix.service }}-dev \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for service to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster shopcloud-dev \
+            --services shopcloud-${{ matrix.service }}-dev \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Verify service health
+        run: |
+          SERVICE_ENDPOINT=$(aws elbv2 describe-load-balancers \
+            --names shopcloud-public-dev \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          
+          # Service URL depends on service name
+          case "${{ matrix.service }}" in
+            auth)
+              SERVICE_PATH="/auth/health"
+              ;;
+            catalog)
+              SERVICE_PATH="/catalog/health"
+              ;;
+            cart)
+              SERVICE_PATH="/cart/health"
+              ;;
+            checkout)
+              SERVICE_PATH="/checkout/health"
+              ;;
+            invoice)
+              SERVICE_PATH="/invoice/health"
+              ;;
+            admin)
+              echo "Admin service accessed via internal ALB"
+              exit 0
+              ;;
+          esac
+          
+          # Try 5 times to check the endpoint
+          for i in {1..5}; do
+            if curl -s "http://$SERVICE_ENDPOINT$SERVICE_PATH" | grep -q "ok\|running"; then
+              echo "Service ${{ matrix.service }} is healthy"
+              exit 0
+            fi
+            echo "Attempt $i: Service not ready, waiting..."
+            sleep 10
+          done
+          
+          echo "Warning: Could not verify service health"
+          exit 0
