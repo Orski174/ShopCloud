@@ -1,11 +1,11 @@
 output "cluster_endpoint" {
-  value       = aws_rds_cluster.main.endpoint
-  description = "RDS cluster writer endpoint"
+  value       = aws_db_instance.main.endpoint
+  description = "RDS instance endpoint"
 }
 
 output "reader_endpoint" {
-  value       = aws_rds_cluster.main.reader_endpoint
-  description = "RDS cluster reader endpoint"
+  value       = aws_db_instance.main.endpoint
+  description = "RDS instance endpoint (same as writer for single-instance)"
 }
 
 output "db_secret_arn" {
@@ -19,7 +19,7 @@ output "rds_security_group_id" {
 }
 
 output "db_name" {
-  value       = aws_rds_cluster.main.database_name
+  value       = aws_db_instance.main.db_name
   description = "Database name"
 }
 
