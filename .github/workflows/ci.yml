@@ -17,9 +17,7 @@ jobs:
     name: Build and Test Services
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: project
+
 
     steps:
       - name: Checkout repository
