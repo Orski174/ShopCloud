@@ -37,3 +37,23 @@ output "github_actions_role_arn" {
   value       = aws_iam_role.github_actions.arn
   description = "GitHub Actions OIDC deploy role ARN"
 }
+
+output "eks_cluster_role_arn" {
+  value       = aws_iam_role.eks_cluster.arn
+  description = "EKS cluster service role ARN"
+}
+
+output "eks_node_role_arn" {
+  value       = aws_iam_role.eks_node.arn
+  description = "EKS node group role ARN"
+}
+
+output "eks_node_instance_profile" {
+  value       = aws_iam_instance_profile.eks_node.name
+  description = "EKS node instance profile name"
+}
+
+output "eks_service_account_role_arn" {
+  value       = aws_iam_role.eks_service_account.arn
+  description = "EKS service account role ARN (for IRSA)"
+}
