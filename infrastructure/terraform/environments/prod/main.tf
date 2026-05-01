@@ -10,6 +10,9 @@ module "vpc" {
 
 module "waf" {
   source = "../../modules/waf"
+  providers = {
+    aws = aws.us_east_1
+  }
 
   env = var.env
 }
