@@ -64,11 +64,6 @@ resource "aws_rds_cluster" "main" {
   storage_encrypted               = true
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
-  serverlessv2_scaling_configuration {
-    max_capacity = var.max_capacity
-    min_capacity = var.min_capacity
-  }
-
   tags = {
     Name = "shopcloud-${var.env}"
     Env  = var.env
@@ -76,12 +71,13 @@ resource "aws_rds_cluster" "main" {
 }
 
 resource "aws_rds_cluster_instance" "main" {
-  count               = 2
+  count               = 1  # Single instance for free tier
   cluster_identifier  = aws_rds_cluster.main.id
-  instance_class      = "db.serverless"
+  instance_class      = "db.t3.micro"  # Free tier eligible
   engine              = aws_rds_cluster.main.engine
   engine_version      = aws_rds_cluster.main.engine_version
   publicly_accessible = false
+  auto_minor_version_upgrade = true
 
   tags = {
     Name = "shopcloud-${var.env}-${count.index + 1}"
