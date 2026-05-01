@@ -20,7 +20,7 @@ module "rds" {
   min_capacity              = 1
   max_capacity              = 16
   skip_final_snapshot       = false
-  backup_retention_period   = 7
+  backup_retention_period   = 1  # Free tier maximum
 }
 
 module "dynamodb" {
@@ -33,15 +33,17 @@ module "dynamodb" {
 module "iam" {
   source = "../../modules/iam"
 
-  env                    = var.env
-  aws_account_id         = var.aws_account_id
-  github_org             = var.github_org
-  github_repo            = var.github_repo
-  dynamodb_table_arn     = module.dynamodb.table_arn
-  s3_invoices_bucket_arn = module.s3.invoices_bucket_arn
-  s3_images_bucket_arn   = module.s3.images_bucket_arn
-  sqs_invoice_queue_arn  = aws_sqs_queue.invoice_queue.arn
-  rds_secret_arn         = module.rds.db_secret_arn
+  env                          = var.env
+  aws_account_id               = var.aws_account_id
+  github_org                   = var.github_org
+  github_repo                  = var.github_repo
+  dynamodb_table_arn           = module.dynamodb.table_arn
+  s3_invoices_bucket_arn       = module.s3.invoices_bucket_arn
+  s3_images_bucket_arn         = module.s3.images_bucket_arn
+  sqs_invoice_queue_arn        = aws_sqs_queue.invoice_queue.arn
+  rds_secret_arn               = module.rds.db_secret_arn
+  create_oidc_provider         = false  # Use existing provider created by dev
+  existing_oidc_provider_arn   = local.github_oidc_provider_arn
 }
 
 module "alb" {
@@ -71,12 +73,8 @@ module "cloudfront" {
   waf_acl_arn          = ""  # WAF temporarily disabled
 }
 
-module "ecr" {
-  source = "../../modules/ecr"
-
-  env      = var.env
-  services = var.services
-}
+# ECR repositories are shared across environments (created by dev)
+# See ecr.tf for data source references
 
 module "ecs" {
   source = "../../modules/ecs"

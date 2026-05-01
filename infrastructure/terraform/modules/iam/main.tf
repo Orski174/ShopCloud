@@ -301,6 +301,7 @@ data "tls_certificate" "github" {
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
+  count           = var.create_oidc_provider ? 1 : 0
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = [data.tls_certificate.github.certificates[0].sha1_fingerprint]
   url             = "https://token.actions.githubusercontent.com"
@@ -308,6 +309,11 @@ resource "aws_iam_openid_connect_provider" "github" {
   tags = {
     Env = var.env
   }
+}
+
+# Reference to OIDC provider (either newly created or existing)
+locals {
+  oidc_provider_arn = var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : var.existing_oidc_provider_arn
 }
 
 resource "aws_iam_role" "github_actions" {
@@ -319,7 +325,7 @@ resource "aws_iam_role" "github_actions" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Effect = "Allow"
       Principal = {
-        Federated = aws_iam_openid_connect_provider.github.arn
+        Federated = local.oidc_provider_arn
       }
       Condition = {
         StringEquals = {
