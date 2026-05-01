@@ -68,18 +68,19 @@ resource "aws_security_group" "ecs_tasks" {
   }
 }
 
-# CloudWatch Log Groups
-resource "aws_cloudwatch_log_group" "services" {
-  for_each = toset(var.services)
+# CloudWatch Log Groups (pre-created or managed by ECS service)
+# resource "aws_cloudwatch_log_group" "services" {
+#   for_each = toset(var.services)
+#
+#   name              = "/ecs/shopcloud-${each.value}-${var.env}"
+#   retention_in_days = var.env == "prod" ? 90 : 30
+#
+#   tags = {
+#     Name = "shopcloud-${each.value}-${var.env}"
+#     Env  = var.env
+#   }
+# }
 
-  name              = "/ecs/shopcloud-${each.value}-${var.env}"
-  retention_in_days = var.env == "prod" ? 90 : 30
-
-  tags = {
-    Name = "shopcloud-${each.value}-${var.env}"
-    Env  = var.env
-  }
-}
 
 # Task Definitions
 resource "aws_ecs_task_definition" "services" {
@@ -183,7 +184,7 @@ resource "aws_ecs_task_definition" "services" {
     logConfiguration = {
       logDriver = "awslogs"
       options = {
-        "awslogs-group"         = aws_cloudwatch_log_group.services[each.value].name
+        "awslogs-group"         = "/ecs/shopcloud-${each.value}-${var.env}"
         "awslogs-region"        = var.aws_region
         "awslogs-stream-prefix" = "ecs"
       }
