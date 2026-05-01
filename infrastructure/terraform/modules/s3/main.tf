@@ -41,6 +41,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "invoices" {
     id     = "transition-to-glacier"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     transition {
       days          = 90
       storage_class = "GLACIER"

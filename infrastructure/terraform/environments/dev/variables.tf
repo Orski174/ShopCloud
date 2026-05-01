@@ -81,3 +81,8 @@ variable "email_endpoint" {
   type        = string
   default     = "alerts@shopcloud.local"
 }
+variable "db_password" {
+  description = "Database password."
+  type        = string
+  sensitive   = true
+}
