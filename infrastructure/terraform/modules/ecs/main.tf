@@ -215,7 +215,7 @@ resource "aws_ecs_service" "services" {
   load_balancer {
     target_group_arn = each.value == "admin" ? var.admin_target_group_arn : var.target_group_arns[each.value]
     container_name   = each.value
-    container_port   = lookup({
+    container_port = lookup({
       auth     = 3001
       catalog  = 3002
       cart     = 3003

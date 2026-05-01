@@ -20,8 +20,8 @@ variable "private_subnet_ids" {
 
 variable "services" {
   type = map(object({
-    port                = number
-    health_check_path   = string
+    port              = number
+    health_check_path = string
   }))
   description = "Map of service configurations"
   default = {

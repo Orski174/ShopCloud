@@ -76,9 +76,9 @@ resource "aws_rds_cluster" "main" {
 }
 
 resource "aws_rds_cluster_instance" "main" {
-  count              = 2
-  cluster_identifier = aws_rds_cluster.main.id
-  instance_class     = "db.serverless"
+  count               = 2
+  cluster_identifier  = aws_rds_cluster.main.id
+  instance_class      = "db.serverless"
   engine              = aws_rds_cluster.main.engine
   engine_version      = aws_rds_cluster.main.engine_version
   publicly_accessible = false

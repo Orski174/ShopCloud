@@ -1,7 +1,7 @@
 resource "aws_dynamodb_table" "carts" {
-  name           = "shopcloud-carts-${var.env}"
-  billing_mode   = var.billing_mode
-  hash_key       = "userId"
+  name         = "shopcloud-carts-${var.env}"
+  billing_mode = var.billing_mode
+  hash_key     = "userId"
 
   attribute {
     name = "userId"
