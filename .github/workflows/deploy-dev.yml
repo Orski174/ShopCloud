@@ -29,6 +29,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.DEV_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-duration-seconds: 3600
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -66,6 +67,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.DEV_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-duration-seconds: 3600
 
       - name: Update ECS service
         run: |
