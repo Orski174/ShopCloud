@@ -3,6 +3,12 @@ variable "env" {
   description = "Environment: dev or prod"
 }
 
+variable "vpc_id" {
+  type        = string
+  default     = null
+  description = "Existing VPC ID to reuse (optional, for free tier). If null, create new VPC."
+}
+
 variable "vpc_cidr" {
   type        = string
   description = "CIDR block for VPC"

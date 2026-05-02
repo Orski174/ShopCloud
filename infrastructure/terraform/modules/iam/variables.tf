@@ -52,3 +52,15 @@ variable "rds_secret_arn" {
   type        = string
   description = "ARN of RDS secret in Secrets Manager"
 }
+
+variable "create_oidc_provider" {
+  type        = bool
+  description = "Whether to create GitHub OIDC provider (skip if already exists)"
+  default     = true
+}
+
+variable "existing_oidc_provider_arn" {
+  type        = string
+  description = "ARN of existing GitHub OIDC provider (if create_oidc_provider is false)"
+  default     = ""
+}

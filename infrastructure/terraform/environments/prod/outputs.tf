@@ -1,16 +1,16 @@
 output "ecr_repository_urls" {
   description = "ECR repository URLs for ShopCloud services."
-  value       = module.ecr.repository_urls
+  value       = local.ecr_repository_urls
 }
 
 output "ecr_repository_names" {
   description = "ECR repository names for ShopCloud services."
-  value       = module.ecr.repository_names
+  value       = local.ecr_repository_names
 }
 
 output "vpc_id" {
-  description = "VPC ID"
-  value       = module.vpc.vpc_id
+  description = "VPC ID (using existing default VPC)"
+  value       = local.vpc_id
 }
 
 output "public_alb_dns_name" {
@@ -76,4 +76,9 @@ output "github_actions_role_arn" {
 output "sqs_queue_url" {
   description = "SQS invoice queue URL"
   value       = aws_sqs_queue.invoice_queue.url
+}
+
+output "github_actions_role_arn" {
+  description = "GitHub Actions OIDC role ARN for prod deployments"
+  value       = module.iam.github_actions_role_arn
 }

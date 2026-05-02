@@ -13,8 +13,8 @@ resource "aws_dynamodb_table" "carts" {
     enabled        = true
   }
 
-  point_in_time_recovery_specification {
-    point_in_time_recovery_enabled = true
+  point_in_time_recovery {
+    enabled = true
   }
 
   tags = {

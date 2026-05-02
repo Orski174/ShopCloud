@@ -9,8 +9,8 @@ output "ecr_repository_names" {
 }
 
 output "vpc_id" {
-  description = "VPC ID"
-  value       = module.vpc.vpc_id
+  description = "VPC ID (using existing default VPC)"
+  value       = local.vpc_id
 }
 
 output "public_alb_dns_name" {

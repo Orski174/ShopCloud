@@ -1,6 +1,8 @@
 node_modules/
 .env
 !.env.example
+**/terraform.tfvars
+**/*.auto.tfvars
 *.log
 dist/
 coverage/

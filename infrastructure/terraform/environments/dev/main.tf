@@ -1,18 +1,15 @@
-module "vpc" {
-  source = "../../modules/vpc"
+# Use existing default VPC — skip vpc module to avoid free tier VPC limit (max 5 per region)
+# All other modules will use local.vpc_id and local.public/private_subnet_ids from data.tf
 
-  env                  = var.env
-  vpc_cidr             = var.vpc_cidr
-  public_subnet_cidrs  = var.public_subnet_cidrs
-  private_subnet_cidrs = var.private_subnet_cidrs
-  azs                  = var.azs
-}
-
-module "waf" {
-  source = "../../modules/waf"
-
-  env = var.env
-}
+# TODO: WAF rule reference issue with AWS provider v5.50 — skipping for now
+# module "waf" {
+#   source = "../../modules/waf"
+#   providers = {
+#     aws = aws.us_east_1
+#   }
+#
+#   env = var.env
+# }
 
 module "s3" {
   source = "../../modules/s3"
@@ -25,8 +22,8 @@ module "rds" {
   source = "../../modules/rds"
 
   env                       = var.env
-  vpc_id                    = module.vpc.vpc_id
-  private_subnet_ids        = module.vpc.private_subnet_ids
+  vpc_id                    = local.vpc_id
+  private_subnet_ids        = local.private_subnet_ids
   db_name                   = var.db_name
   db_username               = var.db_username
   allowed_security_group_id = module.alb.public_alb_sg_id
@@ -70,9 +67,9 @@ module "alb" {
   source = "../../modules/alb"
 
   env                = var.env
-  vpc_id             = module.vpc.vpc_id
-  public_subnet_ids  = module.vpc.public_subnet_ids
-  private_subnet_ids = module.vpc.private_subnet_ids
+  vpc_id             = local.vpc_id
+  public_subnet_ids  = local.public_subnet_ids
+  private_subnet_ids = local.private_subnet_ids
   services = {
     auth     = { port = 3001, health_check_path = "/health" }
     catalog  = { port = 3002, health_check_path = "/health" }
@@ -90,7 +87,7 @@ module "cloudfront" {
   alb_dns_name         = module.alb.public_alb_dns_name
   images_bucket_domain = module.s3.images_bucket_domain_name
   images_bucket_arn    = module.s3.images_bucket_arn
-  waf_acl_arn          = module.waf.web_acl_arn
+  waf_acl_arn          = ""  # WAF temporarily disabled
 }
 
 module "ecr" {
@@ -106,8 +103,8 @@ module "ecs" {
   env                = var.env
   aws_region         = var.aws_region
   aws_account_id     = var.aws_account_id
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
+  vpc_id             = local.vpc_id
+  private_subnet_ids = local.private_subnet_ids
   alb_sg_id          = module.alb.public_alb_sg_id
   ecs_exec_role_arn  = module.iam.ecs_exec_role_arn
   task_role_arns = {

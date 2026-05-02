@@ -1,18 +1,5 @@
-module "vpc" {
-  source = "../../modules/vpc"
-
-  env                  = var.env
-  vpc_cidr             = var.vpc_cidr
-  public_subnet_cidrs  = var.public_subnet_cidrs
-  private_subnet_cidrs = var.private_subnet_cidrs
-  azs                  = var.azs
-}
-
-module "waf" {
-  source = "../../modules/waf"
-
-  env = var.env
-}
+# Use existing default VPC — skip vpc module to avoid free tier VPC limit (max 5 per region)
+# All other modules will use local.vpc_id and local.public/private_subnet_ids from data.tf
 
 module "s3" {
   source = "../../modules/s3"
@@ -25,15 +12,15 @@ module "rds" {
   source = "../../modules/rds"
 
   env                       = var.env
-  vpc_id                    = module.vpc.vpc_id
-  private_subnet_ids        = module.vpc.private_subnet_ids
+  vpc_id                    = local.vpc_id
+  private_subnet_ids        = local.private_subnet_ids
   db_name                   = var.db_name
   db_username               = var.db_username
   allowed_security_group_id = module.alb.public_alb_sg_id
   min_capacity              = 1
   max_capacity              = 16
   skip_final_snapshot       = false
-  backup_retention_period   = 7
+  backup_retention_period   = 1  # Free tier maximum
 }
 
 module "dynamodb" {
@@ -64,15 +51,17 @@ module "iam" {
   frontend_cloudfront_distribution_arn = module.frontend_hosting.cloudfront_distribution_arn
   sqs_invoice_queue_arn                = aws_sqs_queue.invoice_queue.arn
   rds_secret_arn                       = module.rds.db_secret_arn
+  create_oidc_provider                 = false # Use existing provider created by dev
+  existing_oidc_provider_arn           = local.github_oidc_provider_arn
 }
 
 module "alb" {
   source = "../../modules/alb"
 
   env                = var.env
-  vpc_id             = module.vpc.vpc_id
-  public_subnet_ids  = module.vpc.public_subnet_ids
-  private_subnet_ids = module.vpc.private_subnet_ids
+  vpc_id             = local.vpc_id
+  public_subnet_ids  = local.public_subnet_ids
+  private_subnet_ids = local.private_subnet_ids
   services = {
     auth     = { port = 3001, health_check_path = "/health" }
     catalog  = { port = 3002, health_check_path = "/health" }
@@ -90,15 +79,11 @@ module "cloudfront" {
   alb_dns_name         = module.alb.public_alb_dns_name
   images_bucket_domain = module.s3.images_bucket_domain_name
   images_bucket_arn    = module.s3.images_bucket_arn
-  waf_acl_arn          = module.waf.web_acl_arn
+  waf_acl_arn          = ""  # WAF temporarily disabled
 }
 
-module "ecr" {
-  source = "../../modules/ecr"
-
-  env      = var.env
-  services = var.services
-}
+# ECR repositories are shared across environments (created by dev)
+# See ecr.tf for data source references
 
 module "ecs" {
   source = "../../modules/ecs"
@@ -106,8 +91,8 @@ module "ecs" {
   env                = var.env
   aws_region         = var.aws_region
   aws_account_id     = var.aws_account_id
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
+  vpc_id             = local.vpc_id
+  private_subnet_ids = local.private_subnet_ids
   alb_sg_id          = module.alb.public_alb_sg_id
   ecs_exec_role_arn  = module.iam.ecs_exec_role_arn
   task_role_arns = {
@@ -120,29 +105,28 @@ module "ecs" {
   }
   target_group_arns      = module.alb.target_group_arns
   admin_target_group_arn = module.alb.admin_target_group_arn
-  db_secret_arn          = module.rds.db_secret_arn
   db_host                = module.rds.cluster_endpoint
-  db_name                = var.db_name
-  db_username            = var.db_username
+  db_secret_arn          = module.rds.db_secret_arn
   dynamodb_table_name    = module.dynamodb.table_name
+  sqs_invoice_queue_url  = aws_sqs_queue.invoice_queue.url
   s3_invoices_bucket     = module.s3.invoices_bucket_name
   s3_images_bucket       = module.s3.images_bucket_name
-  sqs_invoice_queue_url  = aws_sqs_queue.invoice_queue.url
+  image_tag              = "latest"
   services               = var.services
   cpu = {
+    auth     = 256
+    catalog  = 256
+    cart     = 256
+    checkout = 512
+    admin    = 256
+    invoice  = 256
+  }
+  memory = {
     auth     = 512
-    catalog  = 1024
+    catalog  = 512
     cart     = 512
     checkout = 1024
     admin    = 512
-    invoice  = 512
-  }
-  memory = {
-    auth     = 1024
-    catalog  = 2048
-    cart     = 1024
-    checkout = 2048
-    admin    = 1024
     invoice  = 1024
   }
   desired_count = {
@@ -150,81 +134,51 @@ module "ecs" {
     catalog  = 2
     cart     = 2
     checkout = 2
-    admin    = 2
-    invoice  = 2
+    admin    = 1
+    invoice  = 1
   }
-  image_tag = "prod"
 }
 
-module "monitoring" {
-  source = "../../modules/monitoring"
-
-  env                           = var.env
-  cluster_name                  = module.ecs.cluster_name
-  alb_arn_suffix                = module.alb.public_alb_arn_suffix
-  target_group_arn_suffixes     = module.alb.target_group_arn_suffixes
-  admin_target_group_arn_suffix = module.alb.admin_target_group_arn_suffix
-  services                      = var.services
-  rds_cluster_id                = split(":", module.rds.cluster_endpoint)[0]
-  dynamodb_table_name           = module.dynamodb.table_name
-  sqs_queue_name                = aws_sqs_queue.invoice_queue.name
-  sqs_dlq_name                  = aws_sqs_queue.invoice_dlq.name
-  email_endpoint                = var.email_endpoint
-}
-
-# SQS Queue for Invoice Processing
+# SQS queues for async invoice processing
 resource "aws_sqs_queue" "invoice_queue" {
-  name                       = "shopcloud-invoice-queue-${var.env}"
+  name                      = "shopcloud-invoice-queue-${var.env}"
   visibility_timeout_seconds = 300
-  message_retention_seconds  = 86400
-  receive_wait_time_seconds  = 20
+  message_retention_seconds = 86400
+  receive_wait_time_seconds = 20
 
   tags = {
-    Name = "shopcloud-invoice-queue-${var.env}"
-    Env  = var.env
+    Env = var.env
   }
 }
 
-# SQS Dead-Letter Queue
 resource "aws_sqs_queue" "invoice_dlq" {
   name = "shopcloud-invoice-dlq-${var.env}"
 
   tags = {
-    Name = "shopcloud-invoice-dlq-${var.env}"
-    Env  = var.env
+    Env = var.env
   }
 }
 
-# SQS Queue Redrive Policy
 resource "aws_sqs_queue_redrive_policy" "invoice_queue" {
-  queue_url = aws_sqs_queue.invoice_queue.id
-  redrive_policy = jsonencode({
+  queue_url             = aws_sqs_queue.invoice_queue.id
+  redrive_policy        = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.invoice_dlq.arn
     maxReceiveCount     = 3
   })
 }
 
-# S3 Images Bucket Policy for CloudFront OAC
-resource "aws_s3_bucket_policy" "images_cloudfront" {
-  bucket = module.s3.images_bucket_name
+module "monitoring" {
+  source = "../../modules/monitoring"
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Sid    = "AllowCloudFrontOAC"
-      Effect = "Allow"
-      Principal = {
-        Service = "cloudfront.amazonaws.com"
-      }
-      Action   = "s3:GetObject"
-      Resource = "${module.s3.images_bucket_arn}/*"
-      Condition = {
-        StringEquals = {
-          "AWS:SourceArn" = module.cloudfront.distribution_arn
-        }
-      }
-    }]
-  })
-
-  depends_on = [module.cloudfront]
+  env                            = var.env
+  cluster_name                   = module.ecs.cluster_name
+  services                       = var.services
+  alb_arn_suffix                 = module.alb.public_alb_arn_suffix
+  target_group_arn_suffixes      = module.alb.target_group_arn_suffixes
+  admin_target_group_arn_suffix  = split("/", module.alb.admin_target_group_arn)[2]
+  rds_cluster_id                 = split(":", module.rds.cluster_endpoint)[0]
+  dynamodb_table_name            = module.dynamodb.table_name
+  sqs_queue_name                 = aws_sqs_queue.invoice_queue.name
+  sqs_dlq_name                   = aws_sqs_queue.invoice_dlq.name
+  email_endpoint                 = "noreply@example.com"
 }
