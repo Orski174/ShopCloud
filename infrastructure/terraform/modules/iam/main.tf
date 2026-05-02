@@ -460,6 +460,16 @@ resource "aws_iam_role_policy" "github_actions" {
           "sts:AssumeRole"
         ]
         Resource = "arn:aws:iam::${var.aws_account_id}:role/shopcloud-eks-*"
+      },
+      {
+        Sid    = "ALBHealthCheck"
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:DescribeLoadBalancers",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "elasticloadbalancing:DescribeTargetHealth"
+        ]
+        Resource = "*"
       }
     ]
   })
