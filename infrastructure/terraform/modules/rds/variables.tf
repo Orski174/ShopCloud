@@ -27,7 +27,12 @@ variable "db_username" {
 
 variable "allowed_security_group_id" {
   type        = string
-  description = "Security group ID allowed to connect to RDS"
+  description = "Security group ID allowed to connect to RDS (ALB)"
+}
+
+variable "ecs_security_group_id" {
+  type        = string
+  description = "ECS security group ID for task connections to RDS"
 }
 
 variable "min_capacity" {

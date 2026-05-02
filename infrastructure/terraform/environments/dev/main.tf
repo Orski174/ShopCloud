@@ -27,6 +27,7 @@ module "rds" {
   db_name                   = var.db_name
   db_username               = var.db_username
   allowed_security_group_id = module.alb.public_alb_sg_id
+  ecs_security_group_id     = module.ecs.ecs_sg_id
   min_capacity              = 0.5
   max_capacity              = 4
   skip_final_snapshot       = true

@@ -26,6 +26,30 @@ resource "aws_security_group" "rds" {
     security_groups = [var.allowed_security_group_id]
   }
 
+  # Allow ECS tasks to connect to RDS
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [var.ecs_security_group_id]
+  }
+
+  # Allow HTTPS egress for AWS API calls (Secrets Manager, etc)
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Allow DNS egress
+  egress {
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = {
     Name = "shopcloud-rds-${var.env}"
     Env  = var.env
