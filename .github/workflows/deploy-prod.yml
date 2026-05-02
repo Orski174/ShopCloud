@@ -124,17 +124,18 @@ jobs:
               ;;
           esac
           
-          # Try multiple times to check the endpoint
+          # Try multiple times to check the endpoint (follow redirects)
           for i in {1..10}; do
-            if curl -s "http://$SERVICE_ENDPOINT$SERVICE_PATH" | grep -q "ok\|running"; then
+            response=$(curl -s -L "https://$SERVICE_ENDPOINT$SERVICE_PATH" 2>/dev/null | grep -o "ok\|running" || echo "")
+            if [ ! -z "$response" ]; then
               echo "Service ${{ matrix.service }} is healthy"
               exit 0
             fi
-            echo "Attempt $i: Service not ready, waiting..."
+            echo "Attempt $i: Service not ready or endpoint unreachable, waiting..."
             sleep 15
           done
           
-          echo "Warning: Could not verify service health via endpoint, but deployment task completed"
+          echo "Warning: Could not verify service health via endpoint, but ECS reports service is running"
           exit 0
 
       - name: Check 5xx error rate
