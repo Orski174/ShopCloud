@@ -176,7 +176,7 @@ resource "aws_ecs_task_definition" "services" {
 
     secrets = [
       {
-        name      = "DB_PASSWORD"
+        name      = "DB_PASS"
         valueFrom = "${var.db_secret_arn}:password::"
       }
     ]
