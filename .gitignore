@@ -5,3 +5,5 @@ node_modules/
 dist/
 coverage/
 .DS_Store
+.terraform/
+.terraform.lock.hcl
