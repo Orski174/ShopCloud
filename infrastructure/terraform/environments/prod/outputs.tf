@@ -77,8 +77,3 @@ output "sqs_queue_url" {
   description = "SQS invoice queue URL"
   value       = aws_sqs_queue.invoice_queue.url
 }
-
-output "github_actions_role_arn" {
-  description = "GitHub Actions OIDC role ARN for prod deployments"
-  value       = module.iam.github_actions_role_arn
-}
