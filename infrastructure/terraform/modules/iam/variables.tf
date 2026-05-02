@@ -33,6 +33,16 @@ variable "s3_images_bucket_arn" {
   description = "ARN of S3 images bucket"
 }
 
+variable "frontend_bucket_arn" {
+  type        = string
+  description = "ARN of S3 frontend hosting bucket"
+}
+
+variable "frontend_cloudfront_distribution_arn" {
+  type        = string
+  description = "ARN of CloudFront distribution serving the frontend"
+}
+
 variable "sqs_invoice_queue_arn" {
   type        = string
   description = "ARN of SQS invoice queue"

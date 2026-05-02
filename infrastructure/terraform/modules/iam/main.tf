@@ -351,7 +351,6 @@ resource "aws_iam_role_policy" "github_actions" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ECRAccess"
         Effect = "Allow"
         Action = [
           "ecr:GetAuthorizationToken",
@@ -360,70 +359,51 @@ resource "aws_iam_role_policy" "github_actions" {
           "ecr:PutImage",
           "ecr:InitiateLayerUpload",
           "ecr:UploadLayerPart",
-          "ecr:CompleteLayerUpload",
-          "ecr:DescribeRepositories",
-          "ecr:ListImages"
+          "ecr:CompleteLayerUpload"
         ]
         Resource = "*"
       },
       {
-        Sid    = "ECSDeployment"
         Effect = "Allow"
         Action = [
           "ecs:UpdateService",
           "ecs:DescribeServices",
           "ecs:DescribeTaskDefinition",
           "ecs:RegisterTaskDefinition",
-          "ecs:ListTaskDefinitionFamilies",
-          "ecs:DescribeClusters",
-          "ecs:ListClusters",
-          "ecs:ListServices"
+          "ecs:ListTaskDefinitionFamilies"
         ]
         Resource = "*"
       },
       {
-        Sid    = "EKSClusterManagement"
         Effect = "Allow"
         Action = [
-          "eks:CreateCluster",
-          "eks:DeleteCluster",
-          "eks:DescribeCluster",
-          "eks:ListClusters",
-          "eks:UpdateClusterVersion",
-          "eks:UpdateClusterConfig",
-          "eks:CreateNodegroup",
-          "eks:DeleteNodegroup",
-          "eks:DescribeNodegroup",
-          "eks:ListNodegroups",
-          "eks:UpdateNodegroupVersion",
-          "eks:UpdateNodegroupConfig"
+          "s3:GetBucketLocation",
+          "s3:ListBucket"
         ]
-        Resource = "arn:aws:eks:*:${var.aws_account_id}:cluster/shopcloud-*"
+        Resource = var.frontend_bucket_arn
       },
       {
-        Sid    = "EKSImagePullPush"
         Effect = "Allow"
         Action = [
-          "eks:DescribeCluster",
-          "eks:ListClusters"
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:GetObject"
         ]
-        Resource = "*"
+        Resource = "${var.frontend_bucket_arn}/*"
       },
       {
-        Sid    = "IAMRoleManagement"
         Effect = "Allow"
         Action = [
-          "iam:PassRole",
-          "iam:CreateRole",
-          "iam:DeleteRole",
-          "iam:GetRole",
-          "iam:AttachRolePolicy",
-          "iam:DetachRolePolicy",
-          "iam:ListRolePolicies",
-          "iam:ListAttachedRolePolicies"
+          "cloudfront:CreateInvalidation"
+        ]
+        Resource = var.frontend_cloudfront_distribution_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:PassRole"
         ]
         Resource = [
-          "arn:aws:iam::${var.aws_account_id}:role/shopcloud-*",
           aws_iam_role.ecs_exec.arn,
           aws_iam_role.auth_task.arn,
           aws_iam_role.catalog_task.arn,
@@ -432,207 +412,7 @@ resource "aws_iam_role_policy" "github_actions" {
           aws_iam_role.admin_task.arn,
           aws_iam_role.invoice_task.arn
         ]
-      },
-      {
-        Sid    = "EC2ResourcesForEKS"
-        Effect = "Allow"
-        Action = [
-          "ec2:AuthorizeSecurityGroupIngress",
-          "ec2:RevokeSecurityGroupIngress",
-          "ec2:AuthorizeSecurityGroupEgress",
-          "ec2:RevokeSecurityGroupEgress",
-          "ec2:CreateSecurityGroup",
-          "ec2:DeleteSecurityGroup",
-          "ec2:DescribeSecurityGroups",
-          "ec2:DescribeSubnets",
-          "ec2:DescribeVpcs",
-          "ec2:CreateNetworkInterface",
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:CreateTags",
-          "ec2:DescribeTags"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "KubernetesAuth"
-        Effect = "Allow"
-        Action = [
-          "sts:AssumeRole"
-        ]
-        Resource = "arn:aws:iam::${var.aws_account_id}:role/shopcloud-eks-*"
-      },
-      {
-        Sid    = "ALBHealthCheck"
-        Effect = "Allow"
-        Action = [
-          "elasticloadbalancing:DescribeLoadBalancers",
-          "elasticloadbalancing:DescribeTargetGroups",
-          "elasticloadbalancing:DescribeTargetHealth"
-        ]
-        Resource = "*"
       }
     ]
-  })
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# EKS Cluster Service Role
-# ─────────────────────────────────────────────────────────────────────────────
-
-resource "aws_iam_role" "eks_cluster" {
-  name = "shopcloud-eks-cluster-${var.env}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "eks.amazonaws.com"
-      }
-    }]
-  })
-
-  tags = {
-    Env = var.env
-  }
-}
-
-# Attach AWS managed policy for EKS cluster
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-  role       = aws_iam_role.eks_cluster.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-}
-
-# Attach VPC CNI policy
-resource "aws_iam_role_policy_attachment" "eks_vpc_resource_controller" {
-  role       = aws_iam_role.eks_cluster.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# EKS Node Group Service Role
-# ─────────────────────────────────────────────────────────────────────────────
-
-resource "aws_iam_role" "eks_node" {
-  name = "shopcloud-eks-node-${var.env}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-    }]
-  })
-
-  tags = {
-    Env = var.env
-  }
-}
-
-# Attach AWS managed policies for EKS nodes
-resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
-  role       = aws_iam_role.eks_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
-  role       = aws_iam_role.eks_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-
-resource "aws_iam_role_policy_attachment" "eks_registry_policy" {
-  role       = aws_iam_role.eks_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
-}
-
-# Allow nodes to read from ECR
-resource "aws_iam_role_policy" "eks_node_ecr" {
-  name = "shopcloud-eks-node-ecr-${var.env}"
-  role = aws_iam_role.eks_node.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "ecr:GetAuthorizationToken",
-        "ecr:BatchGetImage",
-        "ecr:GetDownloadUrlForLayer"
-      ]
-      Resource = "*"
-    }]
-  })
-}
-
-# Create instance profile for nodes
-resource "aws_iam_instance_profile" "eks_node" {
-  name = "shopcloud-eks-node-profile-${var.env}"
-  role = aws_iam_role.eks_node.name
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# OIDC Provider for EKS (for IRSA - IAM Roles for Service Accounts)
-# ─────────────────────────────────────────────────────────────────────────────
-
-data "tls_certificate" "eks_oidc" {
-  url = "https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLEJWTOKENEXAMPLE"
-  # This will be overridden by actual cluster endpoint
-}
-
-resource "aws_iam_openid_connect_provider" "eks" {
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.github.certificates[0].sha1_fingerprint]
-  url             = "https://oidc.eks.us-east-1.amazonaws.com"
-
-  tags = {
-    Env = var.env
-  }
-}
-
-# Service account role for EKS deployments (for pulling from ECR)
-resource "aws_iam_role" "eks_service_account" {
-  name = "shopcloud-eks-service-account-${var.env}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRoleWithWebIdentity"
-      Effect = "Allow"
-      Principal = {
-        Federated = aws_iam_openid_connect_provider.eks.arn
-      }
-      Condition = {
-        StringEquals = {
-          "oidc.eks.us-east-1.amazonaws.com:sub" = "system:serviceaccount:default:shopcloud-sa"
-        }
-      }
-    }]
-  })
-
-  tags = {
-    Env = var.env
-  }
-}
-
-# ECR access for EKS service account
-resource "aws_iam_role_policy" "eks_service_account_ecr" {
-  name = "shopcloud-eks-sa-ecr-${var.env}"
-  role = aws_iam_role.eks_service_account.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "ecr:GetAuthorizationToken",
-        "ecr:BatchGetImage",
-        "ecr:GetDownloadUrlForLayer"
-      ]
-      Resource = "*"
-    }]
   })
 }

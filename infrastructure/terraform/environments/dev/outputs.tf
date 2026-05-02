@@ -28,6 +28,21 @@ output "cloudfront_domain_name" {
   value       = module.cloudfront.distribution_domain_name
 }
 
+output "frontend_bucket_name" {
+  description = "Frontend S3 bucket name"
+  value       = module.frontend_hosting.bucket_name
+}
+
+output "frontend_cloudfront_domain_name" {
+  description = "Frontend CloudFront distribution domain name"
+  value       = module.frontend_hosting.cloudfront_domain_name
+}
+
+output "frontend_cloudfront_distribution_id" {
+  description = "Frontend CloudFront distribution ID"
+  value       = module.frontend_hosting.cloudfront_distribution_id
+}
+
 output "rds_endpoint" {
   description = "RDS cluster endpoint"
   value       = module.rds.cluster_endpoint
@@ -51,6 +66,11 @@ output "s3_images_bucket" {
 output "ecs_cluster_name" {
   description = "ECS cluster name"
   value       = module.ecs.cluster_name
+}
+
+output "github_actions_role_arn" {
+  description = "GitHub Actions OIDC deploy role ARN"
+  value       = module.iam.github_actions_role_arn
 }
 
 output "sqs_queue_url" {

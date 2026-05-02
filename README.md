@@ -41,7 +41,6 @@ The local stack uses these ports:
 ### Start All Services
 
 ```bash
-cd project
 docker compose up --build
 ```
 
@@ -303,7 +302,7 @@ AWS-backed local services also use:
 Docker Compose runs migrations and seeders automatically. To run them manually outside Compose:
 
 ```bash
-cd project/database
+cd database
 npm install
 npm run migrate
 npm run seed
@@ -363,9 +362,6 @@ The `.github/workflows/` directory contains CI/CD workflow placeholders.
 
 ## Known Limitations
 
-- Terraform modules are scaffolded but not implemented.
-- GitHub Actions workflows are placeholders.
-- Monitoring dashboards and alarms are placeholders.
-- Automated tests are not yet included.
-- No frontend UI is included.
+- Automated tests are not yet included beyond CI build and health-check workflows.
 - Invoice emails are notification emails only; the generated PDF is uploaded to S3 and is not attached to the SES email.
+- The React/Vite frontend is deployed as static assets through S3 and CloudFront; backend services continue to deploy through ECR/ECS/Fargate.

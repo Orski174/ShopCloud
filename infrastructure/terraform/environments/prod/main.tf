@@ -31,20 +31,29 @@ module "dynamodb" {
   billing_mode = "PAY_PER_REQUEST"
 }
 
+module "frontend_hosting" {
+  source = "../../modules/frontend_hosting"
+
+  env            = var.env
+  aws_account_id = var.aws_account_id
+}
+
 module "iam" {
   source = "../../modules/iam"
 
-  env                          = var.env
-  aws_account_id               = var.aws_account_id
-  github_org                   = var.github_org
-  github_repo                  = var.github_repo
-  dynamodb_table_arn           = module.dynamodb.table_arn
-  s3_invoices_bucket_arn       = module.s3.invoices_bucket_arn
-  s3_images_bucket_arn         = module.s3.images_bucket_arn
-  sqs_invoice_queue_arn        = aws_sqs_queue.invoice_queue.arn
-  rds_secret_arn               = module.rds.db_secret_arn
-  create_oidc_provider         = false  # Use existing provider created by dev
-  existing_oidc_provider_arn   = local.github_oidc_provider_arn
+  env                                  = var.env
+  aws_account_id                       = var.aws_account_id
+  github_org                           = var.github_org
+  github_repo                          = var.github_repo
+  dynamodb_table_arn                   = module.dynamodb.table_arn
+  s3_invoices_bucket_arn               = module.s3.invoices_bucket_arn
+  s3_images_bucket_arn                 = module.s3.images_bucket_arn
+  frontend_bucket_arn                  = module.frontend_hosting.bucket_arn
+  frontend_cloudfront_distribution_arn = module.frontend_hosting.cloudfront_distribution_arn
+  sqs_invoice_queue_arn                = aws_sqs_queue.invoice_queue.arn
+  rds_secret_arn                       = module.rds.db_secret_arn
+  create_oidc_provider                 = false # Use existing provider created by dev
+  existing_oidc_provider_arn           = local.github_oidc_provider_arn
 }
 
 module "alb" {
