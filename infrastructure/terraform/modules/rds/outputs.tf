@@ -1,11 +1,11 @@
 output "cluster_endpoint" {
-  value       = aws_db_instance.main.endpoint
-  description = "RDS instance endpoint"
+  value       = split(":", aws_db_instance.main.endpoint)[0]
+  description = "RDS instance endpoint address (hostname only)"
 }
 
 output "reader_endpoint" {
-  value       = aws_db_instance.main.endpoint
-  description = "RDS instance endpoint (same as writer for single-instance)"
+  value       = split(":", aws_db_instance.main.endpoint)[0]
+  description = "RDS instance endpoint address (hostname only, same as writer for single-instance)"
 }
 
 output "db_secret_arn" {
