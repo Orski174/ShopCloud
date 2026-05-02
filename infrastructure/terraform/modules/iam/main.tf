@@ -323,6 +323,9 @@ resource "aws_iam_role" "github_actions" {
       }
       Condition = {
         StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+        StringLike = {
           "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:*"
         }
       }
@@ -364,6 +367,30 @@ resource "aws_iam_role_policy" "github_actions" {
           "ecs:ListTaskDefinitionFamilies"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketLocation",
+          "s3:ListBucket"
+        ]
+        Resource = var.frontend_bucket_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:GetObject"
+        ]
+        Resource = "${var.frontend_bucket_arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudfront:CreateInvalidation"
+        ]
+        Resource = var.frontend_cloudfront_distribution_arn
       },
       {
         Effect = "Allow"
